@@ -5,7 +5,8 @@ from fastapi.staticfiles import StaticFiles
 from llama_cpp import Llama
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from indexer import refresh_index
+from utils.indexer import refresh_index
+from utils.fetch_model import download_model_from_gdrive
 
 # Constants
 MODEL_PATH = "./model/tinyllama.gguf"
@@ -24,6 +25,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Download model
+download_model_from_gdrive()
 
 # Initialize LLM and embeddings
 llm = Llama(model_path=MODEL_PATH, n_ctx=512, n_threads=4)

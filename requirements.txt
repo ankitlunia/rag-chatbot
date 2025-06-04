@@ -7,3 +7,4 @@ llama-cpp-python
 pypdf
 beautifulsoup4
 requests
+gdown
