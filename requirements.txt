@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+langchain_community
+faiss-cpu
+sentence-transformers
+llama-cpp-python
+pypdf
+beautifulsoup4
+requests

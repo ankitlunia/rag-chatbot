@@ -1,0 +1,1 @@
+python -c "from indexer import refresh_index; refresh_index()"
