@@ -4,10 +4,11 @@ FROM python:3.10-slim
 # Set working directory
 WORKDIR /app
 
-# Install build tools and dependencies needed for building llama-cpp-python
+# Install build tools, cmake, git, python headers
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
+    git \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
