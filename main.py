@@ -8,17 +8,12 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from utils.indexer import refresh_index
 from utils.fetch_model import download_model_from_gdrive
 
-# Constants
-MODEL_PATH = "./model/tinyllama.gguf"
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-FAISS_INDEX_DIR = "faiss_index"
-MAX_CONTEXT_CHARS = 1200
-FIXED_RESPONSE = "I don'tz"
+from config import MODEL_PATH, EMBEDDING_MODEL, FAISS_INDEX_DIR, MAX_CONTEXT_CHARS, FIXED_RESPONSE
 
 # Initialize FastAPI app
 app = FastAPI()
 
-# Add CORS middleware
+# Add CORS middleware to allow all origins, methods, and headers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,69 +21,79 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Download model
-download_model_from_gdrive()
+# Helper Functions
 
-# Initialize LLM and embeddings
-llm = Llama(model_path=MODEL_PATH, n_ctx=512, n_threads=4)
-embedding = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+def initialize_llm_and_embeddings():
+    """Initialize the LLM model and embeddings."""
+    llm = Llama(model_path=MODEL_PATH, n_ctx=512, n_threads=4)
+    embedding = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    return llm, embedding
 
-# Load vector store and retriever
 def load_vectorstore():
+    """Load the FAISS vector store from the specified directory."""
     return FAISS.load_local(FAISS_INDEX_DIR, embedding, allow_dangerous_deserialization=True)
 
-db = load_vectorstore()
-retriever = db.as_retriever()
+def build_prompt(query: str, context: str) -> str:
+    """Construct the prompt for the LLM based on the query and context."""
+    return f"""
+    You are a strict QA assistant. Only answer questions based on the context provided below. Do not go beyond the context.
 
-# Serve static files (index.html, etc.)
+    Context:
+    {context}
+
+    Question: {query}
+    Answer:
+    """
+
+# Initialize model and embeddings
+download_model_from_gdrive()
+llm, embedding = initialize_llm_and_embeddings()
+
+# Load FAISS vector store and create retriever
+vectorstore = load_vectorstore()
+retriever = vectorstore.as_retriever()
+
+# Mount static files (for serving index.html and other static assets)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Serve the homepage
+# Routes
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
+    """Serve the homepage (index.html)."""
     with open("static/index.html", "r") as f:
         return f.read()
 
-# Route: Ask a question
 @app.post("/ask")
 async def ask_question(request: Request):
+    """Route for answering user questions."""
     data = await request.json()
-    query = data.get("question", "").strip()
+    question = data.get("question", "").strip()
 
-    if not query:
+    if not question:
         return {"answer": "Please provide a valid question."}
 
-    docs = retriever.get_relevant_documents(query)
-    print("Retrieved Documents:", docs, "\n\n")
+    # Retrieve relevant documents
+    documents = retriever.get_relevant_documents(question)
 
-    if not docs:
+    if not documents:
         return {"answer": FIXED_RESPONSE}
 
-    # Build context from documents
-    context = "\n".join(doc.page_content for doc in docs)[:MAX_CONTEXT_CHARS]
+    # Build context from retrieved documents (truncate to MAX_CONTEXT_CHARS)
+    context = "\n".join(doc.page_content for doc in documents)[:MAX_CONTEXT_CHARS]
 
-    # Construct prompt
-    prompt = f"""
-You are a strict QA assistant. Only answer questions based on the context provided below. Do not go beyond the context.
+    # Construct prompt and generate response from LLM
+    prompt = build_prompt(question, context)
+    response = llm(prompt, max_tokens=2000, stop=["Question:"])
 
-Context:
-{context}
+    answer = response.get("choices", [{}])[0].get("text", "").strip()
+    return {"answer": answer if answer else FIXED_RESPONSE}
 
-Question: {query}
-Answer:
-    """
-
-    # Generate response from LLM
-    output = llm(prompt, max_tokens=2000, stop=["Question:"])
-    result = output.get("choices", [{}])[0].get("text", "").strip()
-
-    return {"answer": result if result else FIXED_RESPONSE}
-
-# Route: Refresh FAISS index
 @app.post("/refresh-index")
 def refresh_index_endpoint():
+    """Route for refreshing the FAISS index."""
     refresh_index()
-    global db, retriever
-    db = load_vectorstore()
-    retriever = db.as_retriever()
+    global vectorstore, retriever
+    vectorstore = load_vectorstore()
+    retriever = vectorstore.as_retriever()
     return {"message": "Index refreshed from PDFs and URLs"}

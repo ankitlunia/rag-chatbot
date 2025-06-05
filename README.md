@@ -53,6 +53,6 @@ uvicorn main:app --reload --port 8000
 
 ## Environment Setup Notes
 
-- The application requires a language model file to be present in the `model/` directory
+- The language model will be automatically downloaded if it is not present in the `model/` directory.
 - Ensure all your documents are placed in the `pdfs/` directory before running the indexer
 - The FAISS index will be automatically created when you first run the indexer 
