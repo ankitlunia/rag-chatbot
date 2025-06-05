@@ -3,7 +3,7 @@ FROM python:3.10-slim AS build
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y build-essential cmake git python3-dev \
+RUN apt-get update && apt-get install -y libgomp1 build-essential cmake git python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
