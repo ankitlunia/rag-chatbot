@@ -1,16 +1,26 @@
-FROM python:3.9-slim
+# Build stage
+FROM python:3.10-slim AS build
 
 WORKDIR /app
 
-# Copy requirements.txt and install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y build-essential cmake git python3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy the app files
+COPY requirements.txt .
+RUN pip install --prefix=/install --no-cache-dir -r requirements.txt
+
 COPY . .
 
-# Expose the correct port
+# Final runtime stage
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Copy installed packages from build stage
+COPY --from=build /install /usr/local
+
+COPY . .
+
 EXPOSE 8000
 
-# Start FastAPI app with Uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
